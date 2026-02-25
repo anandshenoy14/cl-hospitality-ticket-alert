@@ -4,6 +4,8 @@ Extensible: subclass Notifier to add Slack, SMS, webhooks etc.
 
 Note on Resend free tier: emails can only be sent to the address you
 signed up with unless you verify a custom domain at resend.com/domains.
+
+DEPRECATED
 """
 
 import os
