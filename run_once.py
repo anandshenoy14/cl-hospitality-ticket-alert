@@ -2,10 +2,11 @@
 run_once.py — single-shot scrape and alert.
 Called by GitHub Actions on a schedule.
 
-For each game, compares prices across two portals (P1 Travel and Champions Travel).
-Alert fires only when BOTH portals have a price within the threshold range.
-Email shows the cheapest price from each portal and highlights which is cheaper.
-Failed or unreachable URLs are reported in the email as a separate section.
+Alerting logic:
+  - Both portals in range  → show comparison, highlight cheaper one
+  - Only one portal in range → still alert, note the other portal's status
+  - Neither portal in range  → no alert for that game
+  - URL failed/no prices     → reported in the failed URLs section
 """
 
 import json
@@ -20,7 +21,6 @@ import concurrent.futures
 from scraper import fetch_ticket_prices, TicketResult
 from notifier import ResendEmailNotifier, build_ticket_alert_payload
 
-# ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s – %(message)s",
@@ -49,8 +49,8 @@ GAMES = [
 ]
 
 THRESHOLD_LOW      = 100
-THRESHOLD_HIGH     = 600
-RECIPIENT_EMAIL    = "anand.shenoy14@gmail.com"
+THRESHOLD_HIGH     = 500
+RECIPIENT_EMAIL    = "anandshenoyuidev@gmail.com"
 TIMEZONE           = ZoneInfo("America/Los_Angeles")
 ALERT_WINDOW_START = 9
 ALERT_WINDOW_END   = 17
@@ -90,11 +90,27 @@ def increment_daily_count() -> int:
     return data["count"]
 
 
-# ─── Price helpers ────────────────────────────────────────────────────────────
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def cheapest_in_range(result: TicketResult) -> float | None:
+def cheapest_in_range(result: TicketResult | None) -> float | None:
+    if not result or result.error or not result.prices:
+        return None
     in_range = [p for p in result.prices if THRESHOLD_LOW <= p <= THRESHOLD_HIGH]
     return min(in_range) if in_range else None
+
+
+def portal_status(result: TicketResult | None, url: str) -> dict:
+    """Summarise a portal scrape into a clean status dict."""
+    if result is None:
+        return {"ok": False, "reason": "No result returned", "url": url}
+    if result.error:
+        return {"ok": False, "reason": result.error, "url": url}
+    if not result.prices:
+        return {"ok": False, "reason": "Page loaded but no prices found", "url": url}
+    best = cheapest_in_range(result)
+    if best is None:
+        return {"ok": False, "reason": f"Prices found but none in €{THRESHOLD_LOW}–€{THRESHOLD_HIGH}", "url": url}
+    return {"ok": True, "best": best, "url": url}
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -107,22 +123,20 @@ def main() -> None:
         logger.info(f"Outside alert window ({now.strftime('%H:%M')} PST). Exiting.")
         sys.exit(0)
 
-    daily_count = get_daily_count()
-    if daily_count >= MAX_ALERTS_PER_DAY:
+    if get_daily_count() >= MAX_ALERTS_PER_DAY:
         logger.info(f"Daily cap reached ({MAX_ALERTS_PER_DAY}). Exiting.")
         sys.exit(0)
 
-    # Build flat list of all scrape tasks — 2 per game
+    # Scrape all URLs in parallel
     scrape_tasks = [
-        (game["name"], "P1 Travel",       game["p1travel_url"])
+        (game["name"], "P1 Travel",        game["p1travel_url"])
         for game in GAMES
     ] + [
-        (game["name"], "Champions Travel", game["champions_travel_url"])
+        (game["name"], "Champions Travel",  game["champions_travel_url"])
         for game in GAMES
     ]
 
-    # Scrape all URLs in parallel
-    results: dict[str, dict[str, TicketResult]] = {g["name"]: {} for g in GAMES}
+    raw: dict[str, dict[str, TicketResult]] = {g["name"]: {} for g in GAMES}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(scrape_tasks)) as pool:
         futures = {
             pool.submit(fetch_ticket_prices, f"{name} ({portal})", url): (name, portal)
@@ -130,74 +144,67 @@ def main() -> None:
         }
         for future in concurrent.futures.as_completed(futures):
             name, portal = futures[future]
-            results[name][portal] = future.result()
+            raw[name][portal] = future.result()
 
-    # Categorise each game into: alert, skipped (one portal ok), or failed
-    game_alerts  = []  # both portals in range
-    failed_urls  = []  # one or both portals errored or returned no prices
+    # Evaluate each game
+    game_alerts = []   # at least one portal has in-range prices
+    failed_urls = []   # portals that errored or had no usable prices
 
     for game in GAMES:
         name   = game["name"]
-        p1     = results[name].get("P1 Travel")
-        champs = results[name].get("Champions Travel")
+        p1_status     = portal_status(raw[name].get("P1 Travel"),       game["p1travel_url"])
+        champs_status = portal_status(raw[name].get("Champions Travel"), game["champions_travel_url"])
 
-        # Collect any failures for this game
-        game_failures = []
-        if not p1 or p1.error:
-            reason = p1.error if p1 else "No result returned"
-            game_failures.append({
-                "game_name": name,
-                "portal": "P1 Travel",
-                "url": game["p1travel_url"],
-                "reason": reason,
-            })
-            logger.warning(f"[{name}] P1 Travel failed: {reason}")
-
-        if not champs or champs.error:
-            reason = champs.error if champs else "No result returned"
-            game_failures.append({
-                "game_name": name,
-                "portal": "Champions Travel",
-                "url": game["champions_travel_url"],
-                "reason": reason,
-            })
-            logger.warning(f"[{name}] Champions Travel failed: {reason}")
-
-        failed_urls.extend(game_failures)
-
-        # Only compare prices if both portals loaded successfully
-        if game_failures:
-            continue
-
-        p1_best    = cheapest_in_range(p1)
-        champs_best = cheapest_in_range(champs)
+        p1_ok     = p1_status["ok"]
+        champs_ok = champs_status["ok"]
 
         logger.info(
-            f"[{name}] P1 Travel best: {f'€{p1_best:.0f}' if p1_best else 'none in range'} | "
-            f"Champions Travel best: {f'€{champs_best:.0f}' if champs_best else 'none in range'}"
+            f"[{name}] P1 Travel: {'€' + str(int(p1_status['best'])) if p1_ok else p1_status['reason']} | "
+            f"Champions Travel: {'€' + str(int(champs_status['best'])) if champs_ok else champs_status['reason']}"
         )
 
-        if p1_best is None or champs_best is None:
-            logger.info(f"[{name}] One or both portals have no in-range price. Skipping.")
+        # Collect failed portals
+        for portal_name, status in [("P1 Travel", p1_status), ("Champions Travel", champs_status)]:
+            if not status["ok"]:
+                failed_urls.append({
+                    "game_name": name,
+                    "portal":    portal_name,
+                    "url":       status["url"],
+                    "reason":    status["reason"],
+                })
+
+        # Skip game entirely if neither portal has in-range prices
+        if not p1_ok and not champs_ok:
+            logger.info(f"[{name}] Neither portal has in-range prices. Skipping.")
             continue
 
-        cheaper_portal = "P1 Travel" if p1_best <= champs_best else "Champions Travel"
-        saving         = abs(p1_best - champs_best)
+        # Build alert entry — works for one portal or both
+        alert = {
+            "game_name":            name,
+            "p1travel_url":         game["p1travel_url"],
+            "champions_travel_url": game["champions_travel_url"],
+            "p1_best":              p1_status.get("best"),       # None if failed
+            "champs_best":          champs_status.get("best"),   # None if failed
+            "threshold_low":        THRESHOLD_LOW,
+            "threshold_high":       THRESHOLD_HIGH,
+        }
 
-        game_alerts.append({
-            "game_name":             name,
-            "p1travel_url":          game["p1travel_url"],
-            "champions_travel_url":  game["champions_travel_url"],
-            "p1_best":               p1_best,
-            "champs_best":           champs_best,
-            "cheaper_portal":        cheaper_portal,
-            "cheaper_price":         min(p1_best, champs_best),
-            "saving":                saving,
-            "threshold_low":         THRESHOLD_LOW,
-            "threshold_high":        THRESHOLD_HIGH,
-        })
+        # Determine cheaper / only available portal
+        if p1_ok and champs_ok:
+            alert["cheaper_portal"] = "P1 Travel" if p1_status["best"] <= champs_status["best"] else "Champions Travel"
+            alert["saving"]         = abs(p1_status["best"] - champs_status["best"])
+            alert["comparison"]     = "both"
+        elif p1_ok:
+            alert["cheaper_portal"] = "P1 Travel"
+            alert["saving"]         = None
+            alert["comparison"]     = "p1_only"
+        else:
+            alert["cheaper_portal"] = "Champions Travel"
+            alert["saving"]         = None
+            alert["comparison"]     = "champs_only"
 
-    # Always send an email if there are alerts OR failures to report
+        game_alerts.append(alert)
+
     if not game_alerts and not failed_urls:
         logger.info("No in-range prices and no failures. No alert sent.")
         sys.exit(0)
