@@ -49,7 +49,7 @@ GAMES = [
 ]
 
 THRESHOLD_LOW      = 100
-THRESHOLD_HIGH     = 500
+THRESHOLD_HIGH     = 600
 RECIPIENT_EMAIL    = "anand.shenoy14@gmail.com"
 TIMEZONE           = ZoneInfo("America/Los_Angeles")
 ALERT_WINDOW_START = 9
