@@ -42,7 +42,7 @@ GAMES = [
 ]
 
 THRESHOLD_LOW   = 100
-THRESHOLD_HIGH  = 500
+THRESHOLD_HIGH  = 600
 OUTPUT_FILE     = Path("docs/data/prices.json")
 
 
