@@ -45,7 +45,7 @@ GAMES = [
 
 THRESHOLD_LOW  = 100   # €
 THRESHOLD_HIGH = 500   # €
-RECIPIENT_EMAIL = "anandshenoyuidev@gmail.com"
+RECIPIENT_EMAIL = "anand.shenoy14@gmail.com"
 TIMEZONE = ZoneInfo("America/Los_Angeles")
 ALERT_WINDOW_START = 9   # 9 AM PST
 ALERT_WINDOW_END   = 17  # 5 PM PST
