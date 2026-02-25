@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-02-25T05:09:24.083491+00:00",
+  "last_updated": "2026-02-25T17:51:03.230536+00:00",
   "threshold_low": 100,
   "threshold_high": 600,
   "games": [
@@ -8,7 +8,7 @@
       "p1travel_url": "https://www.p1travel.com/en/football/champions-league/arsenal-vs-tbc-date-tbc",
       "champions_travel_url": "https://champions-travel.com/tickets/uefa-champions-league?arsenal-v-tbc",
       "p1_best": null,
-      "champs_best": 516.0,
+      "champs_best": 517.0,
       "comparison": "champs_only",
       "cheaper_portal": "Champions Travel",
       "saving": null
@@ -18,7 +18,7 @@
       "p1travel_url": "https://www.p1travel.com/en/football/champions-league/manchester-city-vs-tbc-date-tbc",
       "champions_travel_url": "https://champions-travel.com/tickets/uefa-champions-league?manchester-city-v-tbc",
       "p1_best": null,
-      "champs_best": 281.0,
+      "champs_best": 282.0,
       "comparison": "champs_only",
       "cheaper_portal": "Champions Travel",
       "saving": null
@@ -28,7 +28,7 @@
       "p1travel_url": "https://www.p1travel.com/en/football/champions-league/chelsea-vs-tbc-date-tbc",
       "champions_travel_url": "https://champions-travel.com/tickets/uefa-champions-league?chelsea-v-tbc",
       "p1_best": null,
-      "champs_best": 258.0,
+      "champs_best": 259.0,
       "comparison": "champs_only",
       "cheaper_portal": "Champions Travel",
       "saving": null
