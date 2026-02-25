@@ -1,9 +1,9 @@
 """
 Reusable notification module — email via Resend API.
-No SMTP credentials needed, just a RESEND_API_KEY env var.
+Extensible: subclass Notifier to add Slack, SMS, webhooks etc.
 
-Extensible: add Slack, webhooks, desktop notifications by
-subclassing Notifier and implementing send().
+Note on Resend free tier: emails can only be sent to the address you
+signed up with unless you verify a custom domain at resend.com/domains.
 """
 
 import os
@@ -21,7 +21,6 @@ RESEND_API_URL = "https://api.resend.com/emails"
 
 @dataclass
 class AlertPayload:
-    """Everything a notifier needs to deliver one alert."""
     subject: str
     html_body: str
     plain_body: str
@@ -32,8 +31,6 @@ class AlertPayload:
 # ─── Base Interface ───────────────────────────────────────────────────────────
 
 class Notifier(ABC):
-    """Subclass this to add any notification channel."""
-
     @abstractmethod
     def send(self, payload: AlertPayload) -> bool:
         """Send alert. Returns True on success. Must never raise."""
@@ -42,24 +39,9 @@ class Notifier(ABC):
 # ─── Resend Email Notifier ────────────────────────────────────────────────────
 
 class ResendEmailNotifier(Notifier):
-    """
-    Sends email via Resend's REST API.
-
-    Required env var:  RESEND_API_KEY
-    Optional env var:  RESEND_SENDER  (defaults to onboarding@resend.dev)
-
-    The default sender works immediately on Resend's free plan with no
-    domain setup. To use your own domain, verify it in the Resend dashboard
-    and set RESEND_SENDER="Ticket Alert <alerts@yourdomain.com>".
-    """
-
-    def __init__(
-        self,
-        api_key: str | None = None,
-        sender: str | None = None,
-    ):
+    def __init__(self, api_key: str | None = None, sender: str | None = None):
         self.api_key = api_key or os.environ["RESEND_API_KEY"]
-        self.sender = sender or os.environ.get(
+        self.sender  = sender or os.environ.get(
             "RESEND_SENDER", "Ticket Alert <onboarding@resend.dev>"
         )
 
@@ -92,76 +74,137 @@ class ResendEmailNotifier(Notifier):
             return False
 
 
-# ─── Extensibility stubs ──────────────────────────────────────────────────────
-
-class SlackNotifier(Notifier):
-    """Send to a Slack webhook — implement as needed."""
-    def __init__(self, webhook_url: str):
-        self.webhook_url = webhook_url
-
-    def send(self, payload: AlertPayload) -> bool:
-        try:
-            r = requests.post(self.webhook_url, json={"text": payload.plain_body}, timeout=10)
-            return r.ok
-        except Exception as e:
-            logger.error(f"Slack notify failed: {e}")
-            return False
-
-
 # ─── Alert Builder ────────────────────────────────────────────────────────────
 
 def build_ticket_alert_payload(
     recipient: str,
     game_alerts: list[dict],
+    failed_urls: list[dict],
+    threshold_low: int,
+    threshold_high: int,
 ) -> AlertPayload:
     """
-    Build a structured AlertPayload from a list of triggered games.
-    Each game gets its own row in the email.
+    Builds the alert email with two sections:
+    1. Price comparison table — games where both portals are in range
+    2. Failed URLs section — portals that errored or returned no prices
     """
-    subject = f"🎟️ Ticket Price Alert – {len(game_alerts)} game(s) in range"
+    has_alerts  = bool(game_alerts)
+    has_failures = bool(failed_urls)
 
-    rows_html = ""
-    for g in game_alerts:
-        prices_str = ", ".join(f"€{p:.0f}" for p in sorted(g["prices_in_range"]))
-        rows_html += f"""
-        <tr>
-          <td style="padding:10px;border-bottom:1px solid #eee;font-weight:bold">{g['game_name']}</td>
-          <td style="padding:10px;border-bottom:1px solid #eee;color:#27ae60">{prices_str}</td>
-          <td style="padding:10px;border-bottom:1px solid #eee">€{g['threshold_low']} – €{g['threshold_high']}</td>
-          <td style="padding:10px;border-bottom:1px solid #eee">
-            <a href="{g['url']}" style="color:#2980b9">Buy Now</a>
-          </td>
-        </tr>"""
+    # ── Subject ───────────────────────────────────────────────────────────────
+    parts = []
+    if has_alerts:
+        parts.append(f"{len(game_alerts)} game(s) in range")
+    if has_failures:
+        parts.append(f"{len(failed_urls)} URL(s) failed")
+    subject = "🎟️ Ticket Alert — " + " · ".join(parts)
+
+    # ── HTML: price comparison table ──────────────────────────────────────────
+    alerts_html = ""
+    if has_alerts:
+        rows_html = ""
+        for g in game_alerts:
+            p1_is_cheaper = g["cheaper_portal"] == "P1 Travel"
+            p1_style      = "color:#27ae60;font-weight:bold" if p1_is_cheaper     else "color:#555"
+            champs_style  = "color:#27ae60;font-weight:bold" if not p1_is_cheaper else "color:#555"
+            verdict       = f"✅ {g['cheaper_portal']} cheaper by €{g['saving']:.0f}"
+
+            rows_html += f"""
+            <tr style="border-bottom:1px solid #eee">
+              <td style="padding:14px 10px;font-weight:bold;vertical-align:top">{g['game_name']}</td>
+              <td style="padding:14px 10px;vertical-align:top">
+                <span style="{p1_style}">€{g['p1_best']:.0f}</span><br>
+                <a href="{g['p1travel_url']}" style="font-size:11px;color:#2980b9">P1 Travel →</a>
+              </td>
+              <td style="padding:14px 10px;vertical-align:top">
+                <span style="{champs_style}">€{g['champs_best']:.0f}</span><br>
+                <a href="{g['champions_travel_url']}" style="font-size:11px;color:#2980b9">Champions Travel →</a>
+              </td>
+              <td style="padding:14px 10px;vertical-align:top;color:#27ae60;font-size:13px">{verdict}</td>
+            </tr>"""
+
+        alerts_html = f"""
+        <h3 style="color:#2c3e50;margin-top:0">🟢 Prices in range on both portals</h3>
+        <p style="color:#555;margin-top:-8px">Both portals have tickets within €{threshold_low}–€{threshold_high}. Cheaper option highlighted in green.</p>
+        <table width="100%" cellspacing="0" style="border-collapse:collapse;margin-bottom:32px">
+          <thead>
+            <tr style="background:#2c3e50;color:#fff;text-align:left">
+              <th style="padding:12px 10px">Game</th>
+              <th style="padding:12px 10px">P1 Travel</th>
+              <th style="padding:12px 10px">Champions Travel</th>
+              <th style="padding:12px 10px">Verdict</th>
+            </tr>
+          </thead>
+          <tbody>{rows_html}</tbody>
+        </table>"""
+
+    # ── HTML: failed URLs section ─────────────────────────────────────────────
+    failures_html = ""
+    if has_failures:
+        failure_rows = ""
+        for f in failed_urls:
+            failure_rows += f"""
+            <tr style="border-bottom:1px solid #fde">
+              <td style="padding:12px 10px;font-weight:bold">{f['game_name']}</td>
+              <td style="padding:12px 10px;color:#c0392b">{f['portal']}</td>
+              <td style="padding:12px 10px">
+                <a href="{f['url']}" style="color:#2980b9;font-size:12px">{f['url']}</a>
+              </td>
+              <td style="padding:12px 10px;color:#888;font-size:12px">{f['reason']}</td>
+            </tr>"""
+
+        failures_html = f"""
+        <h3 style="color:#c0392b">🔴 URLs that could not be checked</h3>
+        <p style="color:#555;margin-top:-8px">These pages failed to load or returned no prices. Check the links manually.</p>
+        <table width="100%" cellspacing="0" style="border-collapse:collapse">
+          <thead>
+            <tr style="background:#c0392b;color:#fff;text-align:left">
+              <th style="padding:10px">Game</th>
+              <th style="padding:10px">Portal</th>
+              <th style="padding:10px">URL</th>
+              <th style="padding:10px">Reason</th>
+            </tr>
+          </thead>
+          <tbody>{failure_rows}</tbody>
+        </table>"""
 
     html_body = f"""
-    <html><body style="font-family:Arial,sans-serif;max-width:700px;margin:auto">
-      <h2 style="color:#2c3e50">🎟️ Ticket Price Alert</h2>
-      <p>The following games have tickets <strong>within your price range</strong>:</p>
-      <table width="100%" cellspacing="0" style="border-collapse:collapse">
-        <thead>
-          <tr style="background:#2c3e50;color:#fff">
-            <th style="padding:10px;text-align:left">Game</th>
-            <th style="padding:10px;text-align:left">Prices Found</th>
-            <th style="padding:10px;text-align:left">Your Range</th>
-            <th style="padding:10px;text-align:left">Link</th>
-          </tr>
-        </thead>
-        <tbody>{rows_html}</tbody>
-      </table>
-      <p style="color:#7f8c8d;font-size:12px;margin-top:20px">
-        Automated alert · max 10/day · 9 AM – 5 PM PST only
+    <html><body style="font-family:Arial,sans-serif;max-width:800px;margin:auto;color:#2c3e50">
+      <h2 style="color:#2c3e50">🎟️ CL Hospitality Ticket Alert</h2>
+      {alerts_html}
+      {failures_html}
+      <p style="color:#aaa;font-size:11px;margin-top:32px">
+        Automated alert · max 10/day · 9 AM – 5 PM PST only.
       </p>
     </body></html>"""
 
-    lines = ["TICKET PRICE ALERT", "=" * 40]
-    for g in game_alerts:
-        prices_str = ", ".join(f"€{p:.0f}" for p in sorted(g["prices_in_range"]))
-        lines += [
-            f"\nGame:   {g['game_name']}",
-            f"Prices: {prices_str}",
-            f"Range:  €{g['threshold_low']} – €{g['threshold_high']}",
-            f"Link:   {g['url']}",
-        ]
+    # ── Plain text ────────────────────────────────────────────────────────────
+    lines = ["CL HOSPITALITY TICKET ALERT", "=" * 50, ""]
+
+    if has_alerts:
+        lines.append(f"PRICES IN RANGE (€{threshold_low}–€{threshold_high}) ON BOTH PORTALS")
+        lines.append("-" * 50)
+        for g in game_alerts:
+            lines += [
+                f"Game:              {g['game_name']}",
+                f"P1 Travel:         €{g['p1_best']:.0f}  →  {g['p1travel_url']}",
+                f"Champions Travel:  €{g['champs_best']:.0f}  →  {g['champions_travel_url']}",
+                f"Verdict:           {g['cheaper_portal']} is cheaper by €{g['saving']:.0f}",
+                "",
+            ]
+
+    if has_failures:
+        lines.append("FAILED URLS — CHECK MANUALLY")
+        lines.append("-" * 50)
+        for f in failed_urls:
+            lines += [
+                f"Game:    {f['game_name']}",
+                f"Portal:  {f['portal']}",
+                f"URL:     {f['url']}",
+                f"Reason:  {f['reason']}",
+                "",
+            ]
+
     plain_body = "\n".join(lines)
 
     return AlertPayload(
@@ -169,5 +212,8 @@ def build_ticket_alert_payload(
         html_body=html_body,
         plain_body=plain_body,
         recipient=recipient,
-        metadata={"game_count": len(game_alerts), "games": game_alerts},
+        metadata={
+            "game_alerts": len(game_alerts),
+            "failed_urls": len(failed_urls),
+        },
     )
