@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0f1e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CL Tickets" />
+  <meta name="description" content="Champions League Hospitality Ticket Price Tracker" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <title>CL Hospitality Tickets</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:         #0a0f1e;
+      --bg2:        #111827;
+      --bg3:        #1a2235;
+      --border:     rgba(255,255,255,0.07);
+      --accent:     #00e5ff;
+      --accent2:    #7c3aed;
+      --green:      #10b981;
+      --red:        #ef4444;
+      --amber:      #f59e0b;
+      --text:       #f1f5f9;
+      --muted:      #64748b;
+      --card-glow:  0 0 0 1px rgba(0,229,255,0.1), 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      overflow-x: hidden;
+    }
+
+    /* ── Background grid ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Glow orbs ── */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .orb-1 { width: 400px; height: 400px; top: -100px; right: -100px; background: rgba(124,58,237,0.15); }
+    .orb-2 { width: 300px; height: 300px; bottom: 100px; left: -80px;  background: rgba(0,229,255,0.08); }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 0 16px 100px;
+    }
+
+    /* ── Header ── */
+    .header {
+      padding: 20px 0 8px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .header-left { flex: 1; }
+
+    .eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 36px;
+      line-height: 1;
+      letter-spacing: 0.02em;
+      color: var(--text);
+    }
+
+    h1 span {
+      color: var(--accent);
+    }
+
+    .refresh-btn {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      color: var(--muted);
+      font-size: 18px;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+    .refresh-btn:active { transform: scale(0.93); color: var(--accent); }
+    .refresh-btn.spinning { animation: spin 0.7s linear infinite; color: var(--accent); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Status bar ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 12px 0 20px;
+      padding: 10px 14px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-dot.live  { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+    .status-dot.error { background: var(--red); }
+    .status-dot.stale { background: var(--amber); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    .status-text { flex: 1; }
+    .status-time { font-family: 'DM Mono', monospace; font-size: 11px; }
+
+    /* ── Section label ── */
+    .section-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin: 24px 0 10px;
+    }
+
+    /* ── Game card ── */
+    .game-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      box-shadow: var(--card-glow);
+      transition: transform 0.2s, box-shadow 0.2s;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .game-card:active { transform: scale(0.985); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .game-card:nth-child(1) { animation-delay: 0.05s; }
+    .game-card:nth-child(2) { animation-delay: 0.10s; }
+    .game-card:nth-child(3) { animation-delay: 0.15s; }
+
+    .card-header {
+      padding: 14px 16px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .game-name {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.3;
+      flex: 1;
+    }
+
+    .badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-weight: 500;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .badge-green  { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+    .badge-amber  { background: rgba(245,158,11,0.15);  color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
+    .badge-red    { background: rgba(239,68,68,0.12);   color: var(--red);   border: 1px solid rgba(239,68,68,0.2); }
+    .badge-muted  { background: rgba(100,116,139,0.12); color: var(--muted); border: 1px solid rgba(100,116,139,0.2); }
+
+    .divider { height: 1px; background: var(--border); margin: 0 16px; }
+
+    /* ── Portal rows ── */
+    .portal-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      gap: 12px;
+    }
+
+    .portal-row + .portal-row {
+      border-top: 1px solid var(--border);
+    }
+
+    .portal-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .portal-icon {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .portal-icon.p1     { background: rgba(124,58,237,0.2); border: 1px solid rgba(124,58,237,0.3); }
+    .portal-icon.champs { background: rgba(0,229,255,0.1);  border: 1px solid rgba(0,229,255,0.2); }
+
+    .portal-name {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .portal-price {
+      font-family: 'DM Mono', monospace;
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .portal-price.cheaper { color: var(--green); }
+    .portal-price.only    { color: var(--accent); }
+    .portal-price.na      { color: var(--muted); font-size: 13px; font-family: 'DM Sans', sans-serif; font-style: italic; }
+
+    .portal-link {
+      font-size: 18px;
+      text-decoration: none;
+      color: var(--muted);
+      transition: color 0.2s;
+      flex-shrink: 0;
+    }
+    .portal-link:active { color: var(--accent); }
+
+    /* ── Verdict banner ── */
+    .verdict {
+      margin: 0 12px 12px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .verdict.both   { background: rgba(16,185,129,0.1);  color: var(--green); border: 1px solid rgba(16,185,129,0.2); }
+    .verdict.single { background: rgba(0,229,255,0.08);  color: var(--accent); border: 1px solid rgba(0,229,255,0.15); }
+    .verdict.none   { background: rgba(100,116,139,0.08); color: var(--muted); border: 1px solid var(--border); }
+
+    /* ── Failed URLs ── */
+    .failed-card {
+      background: rgba(239,68,68,0.05);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 14px;
+      margin-bottom: 10px;
+      padding: 14px 16px;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .failed-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .failed-game { font-size: 14px; font-weight: 600; }
+    .failed-portal { font-size: 11px; color: var(--red); font-family: 'DM Mono', monospace; }
+    .failed-reason { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .failed-link { font-size: 11px; color: var(--accent); word-break: break-all; text-decoration: none; }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center;
+      padding: 60px 24px;
+      color: var(--muted);
+    }
+    .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+    .empty-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+    .empty-sub { font-size: 13px; line-height: 1.6; }
+
+    /* ── Threshold pill ── */
+    .threshold-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .threshold-pill span { color: var(--accent); }
+
+    /* ── Skeleton loader ── */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg2) 25%, var(--bg3) 50%, var(--bg2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 10px;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    .skeleton-card {
+      height: 140px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    /* ── Install banner (iOS) ── */
+    .install-banner {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      background: var(--bg3);
+      border: 1px solid rgba(0,229,255,0.2);
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      z-index: 100;
+      animation: slideUp 0.4s ease;
+    }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } }
+
+    .install-icon { font-size: 28px; flex-shrink: 0; }
+    .install-text { flex: 1; }
+    .install-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+    .install-sub   { font-size: 11px; color: var(--muted); line-height: 1.4; }
+    .install-close {
+      font-size: 18px;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="eyebrow">UEFA Champions League</div>
+      <h1>CL <span>Tickets</span></h1>
+    </div>
+    <button class="refresh-btn" id="refreshBtn" onclick="loadData()" aria-label="Refresh">↻</button>
+  </div>
+
+  <!-- Threshold -->
+  <div class="threshold-pill">
+    Range <span>€100 – €500</span>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div class="status-dot" id="statusDot"></div>
+    <div class="status-text" id="statusText">Loading prices…</div>
+    <div class="status-time" id="statusTime"></div>
+  </div>
+
+  <!-- Main content -->
+  <div id="content">
+    <!-- Skeleton -->
+    <div class="skeleton skeleton-card"></div>
+    <div class="skeleton skeleton-card"></div>
+    <div class="skeleton skeleton-card"></div>
+  </div>
+
+</div>
+
+<!-- iOS install banner -->
+<div class="install-banner" id="installBanner" style="display:none">
+  <div class="install-icon">📲</div>
+  <div class="install-text">
+    <div class="install-title">Install as App</div>
+    <div class="install-sub">Tap <strong>Share</strong> then <strong>Add to Home Screen</strong> for the full app experience</div>
+  </div>
+  <div class="install-close" onclick="dismissInstall()">✕</div>
+</div>
+
+<script>
+  // ── Config ─────────────────────────────────────────────────────────────[...]
+  const DATA_URL = 'data/prices.json';
+  const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // auto-refresh every 5 min when open
+
+  // ── State ──────────────────────────────────────────────────────────────[...]
+  let lastData = null;
+
+  // ── Load data ────────────────────────────────────────────────────────────[...]
+  async function loadData() {
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('spinning');
+
+    try {
+      const res = await fetch(`${DATA_URL}?t=${Date.now()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      lastData = data;
+      render(data);
+    } catch (err) {
+      renderError(err.message);
+    } finally {
+      btn.classList.remove('spinning');
+    }
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────[...]
+  function render(data) {
+    const { last_updated, games, failed_urls, threshold_low, threshold_high } = data;
+
+    // Status bar
+    const dot  = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    const time = document.getElementById('statusTime');
+
+    const hasAlerts  = games.some(g => g.p1_best !== null || g.champs_best !== null);
+    const hasFailed  = failed_urls && failed_urls.length > 0;
+
+    dot.className = 'status-dot ' + (hasAlerts ? 'live' : hasFailed ? 'stale' : 'live');
+    text.textContent = hasAlerts
+      ? `${games.filter(g => g.p1_best || g.champs_best).length} game(s) with prices in range`
+      : 'No prices in range right now';
+    time.textContent = formatTime(last_updated);
+
+    // Content
+    let html = '';
+
+    // Games section
+    const activeGames = games.filter(g => g.p1_best !== null || g.champs_best !== null);
+    const quietGames  = games.filter(g => g.p1_best === null && g.champs_best === null);
+
+    if (activeGames.length > 0) {
+      html += `<div class="section-label">🟢 In Range</div>`;
+      activeGames.forEach(g => { html += gameCard(g); });
+    }
+
+    if (quietGames.length > 0) {
+      html += `<div class="section-label" style="margin-top:${activeGames.length ? 8 : 24}px">⚪ No Prices in Range</div>`;
+      quietGames.forEach(g => { html += gameCard(g); });
+    }
+
+    if (games.length === 0) {
+      html += `<div class="empty">
+        <div class="empty-icon">🎟️</div>
+        <div class="empty-title">No data yet</div>
+        <div class="empty-sub">GitHub Actions hasn't run yet.<br>Check back after 9 AM PST.</div>
+      </div>`;
+    }
+
+    // Failed URLs
+    if (hasFailed) {
+      html += `<div class="section-label" style="margin-top:16px">🔴 Failed URLs</div>`;
+      failed_urls.forEach(f => {
+        html += `<div class="failed-card">
+          <div class="failed-header">
+            <div>
+              <div class="failed-game">${f.game_name}</div>
+              <div class="failed-portal">${f.portal}</div>
+            </div>
+          </div>
+          <div class="failed-reason">${f.reason}</div>
+          <a href="${f.url}" target="_blank" class="failed-link">${f.url}</a>
+        </div>`;
+      });
+    }
+
+    document.getElementById('content').innerHTML = html;
+  }
+
+  function gameCard(g) {
+    const { game_name, p1_best, champs_best, p1travel_url, champions_travel_url, comparison, cheaper_portal, saving } = g;
+
+    // Badge
+    let badge = '';
+    if (comparison === 'both')        badge = `<span class="badge badge-green">Both portals</span>`;
+    else if (comparison === 'p1_only')     badge = `<span class="badge badge-amber">P1 only</span>`;
+    else if (comparison === 'champs_only') badge = `<span class="badge badge-amber">CT only</span>`;
+    else                                   badge = `<span class="badge badge-muted">No prices</span>`;
+
+    // Verdict
+    let verdict = '';
+    if (comparison === 'both') {
+      verdict = `<div class="verdict both">✅ ${cheaper_portal} cheaper by €${Math.round(saving)}</div>`;
+    } else if (comparison === 'p1_only') {
+      verdict = `<div class="verdict single">ℹ️ Only P1 Travel has in-range prices</div>`;
+    } else if (comparison === 'champs_only') {
+      verdict = `<div class="verdict single">ℹ️ Only Champions Travel has in-range prices</div>`;
+    } else {
+      verdict = `<div class="verdict none">No prices in €100–€500 range</div>`;
+    }
+
+    // P1 price
+    const p1PriceClass = comparison === 'both' && cheaper_portal === 'P1 Travel' ? 'cheaper'
+                       : comparison === 'p1_only' ? 'only'
+                       : p1_best === null ? 'na' : '';
+    const p1PriceText  = p1_best !== null ? `€${Math.round(p1_best)}` : 'Not available';
+
+    // Champs price
+    const champsPriceClass = comparison === 'both' && cheaper_portal === 'Champions Travel' ? 'cheaper'
+                           : comparison === 'champs_only' ? 'only'
+                           : champs_best === null ? 'na' : '';
+    const champsPriceText  = champs_best !== null ? `€${Math.round(champs_best)}` : 'Not available';
+
+    return `
+    <div class="game-card">
+      <div class="card-header">
+        <div class="game-name">${game_name}</div>
+        ${badge}
+      </div>
+      <div class="divider"></div>
+      <div class="portal-row">
+        <div class="portal-left">
+          <div class="portal-icon p1">🏟️</div>
+          <div class="portal-name">P1 Travel</div>
+        </div>
+        <div class="portal-price ${p1PriceClass}">${p1PriceText}</div>
+        <a href="${p1travel_url}" target="_blank" class="portal-link">↗</a>
+      </div>
+      <div class="portal-row">
+        <div class="portal-left">
+          <div class="portal-icon champs">🌟</div>
+          <div class="portal-name">Champions Travel</div>
+        </div>
+        <div class="portal-price ${champsPriceClass}">${champsPriceText}</div>
+        <a href="${champions_travel_url}" target="_blank" class="portal-link">↗</a>
+      </div>
+      ${verdict}
+    </div>`;
+  }
+
+  function renderError(msg) {
+    document.getElementById('statusDot').className = 'status-dot error';
+    document.getElementById('statusText').textContent = 'Failed to load prices';
+    document.getElementById('statusTime').textContent = '';
+    document.getElementById('content').innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">⚠️</div>
+        <div class="empty-title">Could not load data</div>
+        <div class="empty-sub">${msg}<br><br>Pull to refresh or tap ↻</div>
+      </div>`;
+  }
+
+  function formatTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // ── Visibility refresh — fires when app comes to foreground ───────────────
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') loadData();
+  });
+
+  // ── Auto-refresh every 5 min while app is open ────────────────────────────
+  setInterval(() => {
+    if (document.visibilityState === 'visible') loadData();
+  }, REFRESH_INTERVAL_MS);
+
+  // ── iOS install prompt ─────────────────────────────────────────────────────
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.navigator.standalone === true;
+  const dismissed = localStorage.getItem('installDismissed');
+
+  if (isIOS && !isStandalone && !dismissed) {
+    setTimeout(() => {
+      document.getElementById('installBanner').style.display = 'flex';
+    }, 3000);
+  }
+
+  function dismissInstall() {
+    document.getElementById('installBanner').style.display = 'none';
+    localStorage.setItem('installDismissed', '1');
+  }
+
+  // ── Service Worker ────────────────────────────────────────────────────────
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+
+  // ── Initial load ──────────────────────────────────────────────────────────
+  loadData();
+</script>
+</body>
+</html>
