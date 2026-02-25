@@ -74,6 +74,44 @@ class ResendEmailNotifier(Notifier):
             return False
 
 
+# ─── HTML helpers ─────────────────────────────────────────────────────────────
+
+def _price_cell(best: float | None, url: str, portal_label: str, is_cheaper: bool, is_only: bool) -> str:
+    """Render one portal price cell for the comparison table."""
+    if best is None:
+        return f"""
+        <td style="padding:14px 10px;vertical-align:top;color:#aaa;font-style:italic">
+            Not available<br>
+            <a href="{url}" style="font-size:11px;color:#2980b9">{portal_label} →</a>
+        </td>"""
+
+    if is_only:
+        colour = "#2980b9"   # blue — only one available, no comparison
+        weight = "bold"
+    elif is_cheaper:
+        colour = "#27ae60"   # green — cheaper of the two
+        weight = "bold"
+    else:
+        colour = "#555"
+        weight = "normal"
+
+    return f"""
+    <td style="padding:14px 10px;vertical-align:top">
+        <span style="color:{colour};font-weight:{weight}">€{best:.0f}</span><br>
+        <a href="{url}" style="font-size:11px;color:#2980b9">{portal_label} →</a>
+    </td>"""
+
+
+def _verdict_cell(g: dict) -> str:
+    comparison = g["comparison"]
+    if comparison == "both":
+        return f"✅ {g['cheaper_portal']} cheaper by €{g['saving']:.0f}"
+    elif comparison == "p1_only":
+        return "⚠️ Only P1 Travel available"
+    else:
+        return "⚠️ Only Champions Travel available"
+
+
 # ─── Alert Builder ────────────────────────────────────────────────────────────
 
 def build_ticket_alert_payload(
@@ -85,13 +123,15 @@ def build_ticket_alert_payload(
 ) -> AlertPayload:
     """
     Builds the alert email with two sections:
-    1. Price comparison table — games where both portals are in range
-    2. Failed URLs section — portals that errored or returned no prices
+    1. Price table — all games with at least one portal in range
+       - Both portals OK  → comparison with cheaper highlighted in green
+       - One portal only  → shows available price in blue, other cell greyed out
+    2. Failed URLs — portals that errored or returned no usable prices
     """
-    has_alerts  = bool(game_alerts)
+    has_alerts   = bool(game_alerts)
     has_failures = bool(failed_urls)
 
-    # ── Subject ───────────────────────────────────────────────────────────────
+    # Subject
     parts = []
     if has_alerts:
         parts.append(f"{len(game_alerts)} game(s) in range")
@@ -99,33 +139,38 @@ def build_ticket_alert_payload(
         parts.append(f"{len(failed_urls)} URL(s) failed")
     subject = "🎟️ Ticket Alert — " + " · ".join(parts)
 
-    # ── HTML: price comparison table ──────────────────────────────────────────
+    # ── HTML: price table ─────────────────────────────────────────────────────
     alerts_html = ""
     if has_alerts:
         rows_html = ""
         for g in game_alerts:
-            p1_is_cheaper = g["cheaper_portal"] == "P1 Travel"
-            p1_style      = "color:#27ae60;font-weight:bold" if p1_is_cheaper     else "color:#555"
-            champs_style  = "color:#27ae60;font-weight:bold" if not p1_is_cheaper else "color:#555"
-            verdict       = f"✅ {g['cheaper_portal']} cheaper by €{g['saving']:.0f}"
+            p1_best     = g["p1_best"]
+            champs_best = g["champs_best"]
+            comparison  = g["comparison"]
+
+            p1_is_cheaper    = comparison == "both" and g["cheaper_portal"] == "P1 Travel"
+            champs_is_cheaper = comparison == "both" and g["cheaper_portal"] == "Champions Travel"
+            p1_only          = comparison == "p1_only"
+            champs_only      = comparison == "champs_only"
+
+            p1_cell    = _price_cell(p1_best,     g["p1travel_url"],         "P1 Travel",       p1_is_cheaper,    p1_only)
+            champs_cell = _price_cell(champs_best, g["champions_travel_url"], "Champions Travel", champs_is_cheaper, champs_only)
+            verdict     = _verdict_cell(g)
 
             rows_html += f"""
             <tr style="border-bottom:1px solid #eee">
               <td style="padding:14px 10px;font-weight:bold;vertical-align:top">{g['game_name']}</td>
-              <td style="padding:14px 10px;vertical-align:top">
-                <span style="{p1_style}">€{g['p1_best']:.0f}</span><br>
-                <a href="{g['p1travel_url']}" style="font-size:11px;color:#2980b9">P1 Travel →</a>
-              </td>
-              <td style="padding:14px 10px;vertical-align:top">
-                <span style="{champs_style}">€{g['champs_best']:.0f}</span><br>
-                <a href="{g['champions_travel_url']}" style="font-size:11px;color:#2980b9">Champions Travel →</a>
-              </td>
-              <td style="padding:14px 10px;vertical-align:top;color:#27ae60;font-size:13px">{verdict}</td>
+              {p1_cell}
+              {champs_cell}
+              <td style="padding:14px 10px;vertical-align:top;font-size:13px">{verdict}</td>
             </tr>"""
 
         alerts_html = f"""
-        <h3 style="color:#2c3e50;margin-top:0">🟢 Prices in range on both portals</h3>
-        <p style="color:#555;margin-top:-8px">Both portals have tickets within €{threshold_low}–€{threshold_high}. Cheaper option highlighted in green.</p>
+        <h3 style="color:#2c3e50;margin-top:0">🟢 Games with tickets in range</h3>
+        <p style="color:#555;margin-top:-8px">
+            Showing cheapest available price per portal within €{threshold_low}–€{threshold_high}.
+            Green = cheaper of the two · Blue = only portal available · Grey = not available.
+        </p>
         <table width="100%" cellspacing="0" style="border-collapse:collapse;margin-bottom:32px">
           <thead>
             <tr style="background:#2c3e50;color:#fff;text-align:left">
@@ -138,7 +183,7 @@ def build_ticket_alert_payload(
           <tbody>{rows_html}</tbody>
         </table>"""
 
-    # ── HTML: failed URLs section ─────────────────────────────────────────────
+    # ── HTML: failed URLs ─────────────────────────────────────────────────────
     failures_html = ""
     if has_failures:
         failure_rows = ""
@@ -155,7 +200,7 @@ def build_ticket_alert_payload(
 
         failures_html = f"""
         <h3 style="color:#c0392b">🔴 URLs that could not be checked</h3>
-        <p style="color:#555;margin-top:-8px">These pages failed to load or returned no prices. Check the links manually.</p>
+        <p style="color:#555;margin-top:-8px">These pages failed to load or returned no prices. Check the links manually or update the URL in the config.</p>
         <table width="100%" cellspacing="0" style="border-collapse:collapse">
           <thead>
             <tr style="background:#c0392b;color:#fff;text-align:left">
@@ -182,14 +227,16 @@ def build_ticket_alert_payload(
     lines = ["CL HOSPITALITY TICKET ALERT", "=" * 50, ""]
 
     if has_alerts:
-        lines.append(f"PRICES IN RANGE (€{threshold_low}–€{threshold_high}) ON BOTH PORTALS")
+        lines.append(f"GAMES WITH TICKETS IN RANGE (€{threshold_low}–€{threshold_high})")
         lines.append("-" * 50)
         for g in game_alerts:
+            p1_str    = f"€{g['p1_best']:.0f}"    if g["p1_best"]    else "Not available"
+            champs_str = f"€{g['champs_best']:.0f}" if g["champs_best"] else "Not available"
             lines += [
                 f"Game:              {g['game_name']}",
-                f"P1 Travel:         €{g['p1_best']:.0f}  →  {g['p1travel_url']}",
-                f"Champions Travel:  €{g['champs_best']:.0f}  →  {g['champions_travel_url']}",
-                f"Verdict:           {g['cheaper_portal']} is cheaper by €{g['saving']:.0f}",
+                f"P1 Travel:         {p1_str}  →  {g['p1travel_url']}",
+                f"Champions Travel:  {champs_str}  →  {g['champions_travel_url']}",
+                f"Verdict:           {_verdict_cell(g)}",
                 "",
             ]
 
