@@ -1,0 +1,66 @@
+name: CL Hospitality Ticket Alert
+
+on:
+  schedule:
+    # Runs every hour from 9AM to 5PM PST (17:00–01:00 UTC)
+    # PST = UTC-8, so 9AM PST = 17:00 UTC, 5PM PST = 01:00 UTC next day
+    - cron: "0 17 * * *"   # 9AM  PST
+    - cron: "0 18 * * *"   # 10AM PST
+    - cron: "0 19 * * *"   # 11AM PST
+    - cron: "0 20 * * *"   # 12PM PST
+    - cron: "0 21 * * *"   # 1PM  PST
+    - cron: "0 22 * * *"   # 2PM  PST
+    - cron: "0 23 * * *"   # 3PM  PST
+    - cron: "0 0  * * *"   # 4PM  PST
+    - cron: "0 1  * * *"   # 5PM  PST (boundary — run_once.py checks window)
+  workflow_dispatch:        # allows manual trigger from GitHub UI for testing
+
+jobs:
+  check-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # ── 1. Check out your code ──────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Python ────────────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # ── 3. Install Python deps ──────────────────────────────────────────────
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── 4. Install Playwright's Chromium browser ────────────────────────────
+      - name: Install Playwright browsers
+        run: playwright install chromium --with-deps
+
+      # ── 5. Restore daily alert count (persists across runs same day) ────────
+      - name: Restore alert state cache
+        uses: actions/cache@v4
+        with:
+          path: alert_state.json
+          # Cache key includes the date — automatically invalidates at midnight UTC
+          key: alert-state-${{ github.run_id }}
+          restore-keys: |
+            alert-state-
+
+      # ── 6. Run the scraper and send alert if prices are in range ────────────
+      - name: Run ticket price check
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          STATE_FILE: alert_state.json
+        run: python run_once.py
+
+      # ── 7. Save updated daily count for the next run ────────────────────────
+      - name: Save alert state cache
+        if: always()   # save even if run_once.py exits with non-zero
+        uses: actions/cache@v4
+        with:
+          path: alert_state.json
+          key: alert-state-${{ github.run_id }}
