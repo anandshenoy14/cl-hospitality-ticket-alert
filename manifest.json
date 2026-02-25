@@ -1,0 +1,15 @@
+{
+  "name": "CL Hospitality Tickets",
+  "short_name": "CL Tickets",
+  "description": "Champions League hospitality ticket price tracker",
+  "start_url": "/cl-hospitality-ticket-alert/",
+  "scope": "/cl-hospitality-ticket-alert/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0a0f1e",
+  "background_color": "#0a0f1e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
