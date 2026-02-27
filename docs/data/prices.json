@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-02-27T17:25:32.814033+00:00",
+  "last_updated": "2026-02-27T18:42:09.834772+00:00",
   "threshold_low": 100,
   "threshold_high": 600,
   "games": [
@@ -69,7 +69,7 @@
       "game_name": "Chelsea vs TBC",
       "portal": "Champions Travel",
       "url": "https://champions-travel.com/tickets/uefa-champions-league?chelsea-v-tbc",
-      "reason": "Page loaded but no prices found"
+      "reason": "Page load timed out: Page.goto: Timeout 30000ms exceeded.\nCall log:\n  - navigating to \"https://champions-travel.com/tickets/uefa-champions-league?chelsea-v-tbc\", waiting until \"domcontentloaded\"\n"
     }
   ]
 }
