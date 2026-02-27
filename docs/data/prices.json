@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-02-27T03:27:32.203622+00:00",
+  "last_updated": "2026-02-27T17:25:32.814033+00:00",
   "threshold_low": 100,
   "threshold_high": 600,
   "games": [
@@ -8,9 +8,9 @@
       "p1travel_url": "https://www.p1travel.com/en/football/champions-league/arsenal-vs-tbc-date-tbc",
       "champions_travel_url": "https://champions-travel.com/tickets/uefa-champions-league?arsenal-v-tbc",
       "p1_best": null,
-      "champs_best": 517.0,
-      "comparison": "champs_only",
-      "cheaper_portal": "Champions Travel",
+      "champs_best": null,
+      "comparison": "none",
+      "cheaper_portal": null,
       "saving": null
     },
     {
@@ -18,9 +18,9 @@
       "p1travel_url": "https://www.p1travel.com/en/football/champions-league/manchester-city-vs-tbc-date-tbc",
       "champions_travel_url": "https://champions-travel.com/tickets/uefa-champions-league?manchester-city-v-tbc",
       "p1_best": null,
-      "champs_best": 281.0,
-      "comparison": "champs_only",
-      "cheaper_portal": "Champions Travel",
+      "champs_best": null,
+      "comparison": "none",
+      "cheaper_portal": null,
       "saving": null
     },
     {
@@ -28,9 +28,9 @@
       "p1travel_url": "https://www.p1travel.com/en/football/champions-league/chelsea-vs-tbc-date-tbc",
       "champions_travel_url": "https://champions-travel.com/tickets/uefa-champions-league?chelsea-v-tbc",
       "p1_best": null,
-      "champs_best": 259.0,
-      "comparison": "champs_only",
-      "cheaper_portal": "Champions Travel",
+      "champs_best": null,
+      "comparison": "none",
+      "cheaper_portal": null,
       "saving": null
     }
   ],
@@ -42,16 +42,34 @@
       "reason": "Blocked by robots.txt \u2014 skipping to stay compliant"
     },
     {
+      "game_name": "Arsenal vs TBC",
+      "portal": "Champions Travel",
+      "url": "https://champions-travel.com/tickets/uefa-champions-league?arsenal-v-tbc",
+      "reason": "Page loaded but no prices found"
+    },
+    {
       "game_name": "Manchester City vs TBC",
       "portal": "P1 Travel",
       "url": "https://www.p1travel.com/en/football/champions-league/manchester-city-vs-tbc-date-tbc",
       "reason": "Blocked by robots.txt \u2014 skipping to stay compliant"
     },
     {
+      "game_name": "Manchester City vs TBC",
+      "portal": "Champions Travel",
+      "url": "https://champions-travel.com/tickets/uefa-champions-league?manchester-city-v-tbc",
+      "reason": "Page loaded but no prices found"
+    },
+    {
       "game_name": "Chelsea vs TBC",
       "portal": "P1 Travel",
       "url": "https://www.p1travel.com/en/football/champions-league/chelsea-vs-tbc-date-tbc",
       "reason": "Blocked by robots.txt \u2014 skipping to stay compliant"
+    },
+    {
+      "game_name": "Chelsea vs TBC",
+      "portal": "Champions Travel",
+      "url": "https://champions-travel.com/tickets/uefa-champions-league?chelsea-v-tbc",
+      "reason": "Page loaded but no prices found"
     }
   ]
 }
