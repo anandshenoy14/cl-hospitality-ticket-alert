@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-03-18T03:37:31.586176+00:00",
+  "last_updated": "2026-03-18T17:52:07.936382+00:00",
   "threshold_low": 100,
   "threshold_high": 600,
   "games": [
@@ -8,9 +8,9 @@
       "p1travel_url": "https://www.p1travel.com/en/football/champions-league/arsenal-vs-tbc-date-tbc",
       "champions_travel_url": "https://champions-travel.com/tickets/uefa-champions-league?arsenal-v-tbc",
       "p1_best": null,
-      "champs_best": 434.0,
-      "comparison": "champs_only",
-      "cheaper_portal": "Champions Travel",
+      "champs_best": null,
+      "comparison": "none",
+      "cheaper_portal": null,
       "saving": null
     },
     {
@@ -40,6 +40,12 @@
       "portal": "P1 Travel",
       "url": "https://www.p1travel.com/en/football/champions-league/arsenal-vs-tbc-date-tbc",
       "reason": "Blocked by robots.txt \u2014 skipping to stay compliant"
+    },
+    {
+      "game_name": "Arsenal vs TBC",
+      "portal": "Champions Travel",
+      "url": "https://champions-travel.com/tickets/uefa-champions-league?arsenal-v-tbc",
+      "reason": "Page loaded but no prices found"
     },
     {
       "game_name": "Manchester City vs TBC",
