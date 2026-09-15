@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-09-15T01:20:02.276688+00:00",
+  "last_updated": "2026-09-15T03:03:45.812568+00:00",
   "threshold_low": 100,
   "threshold_high": 600,
   "games": [
@@ -45,7 +45,7 @@
       "game_name": "Arsenal vs TBC",
       "portal": "Champions Travel",
       "url": "https://champions-travel.com/tickets/uefa-champions-league?arsenal-v-tbc",
-      "reason": "Page loaded but no prices found"
+      "reason": "Page load timed out: Page.goto: Timeout 30000ms exceeded.\nCall log:\n  - navigating to \"https://champions-travel.com/tickets/uefa-champions-league?arsenal-v-tbc\", waiting until \"domcontentloaded\"\n"
     },
     {
       "game_name": "Manchester City vs TBC",
