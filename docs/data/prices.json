@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-11-16T02:37:49.342371+00:00",
+  "last_updated": "2026-11-16T04:23:59.267350+00:00",
   "threshold_low": 100,
   "threshold_high": 600,
   "games": [
@@ -39,7 +39,7 @@
       "game_name": "Arsenal vs TBC",
       "portal": "P1 Travel",
       "url": "https://www.p1travel.com/en/football/champions-league/arsenal-vs-tbc-date-tbc",
-      "reason": "Page loaded but no prices found"
+      "reason": "Blocked by robots.txt \u2014 skipping to stay compliant"
     },
     {
       "game_name": "Arsenal vs TBC",
